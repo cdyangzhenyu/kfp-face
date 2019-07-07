@@ -23,7 +23,6 @@ import kfp.onprem as onprem
 from kubernetes.client.models import V1EnvVar
 
 platform = 'onprem'
-is_preprocessed = False
 
 PYTHONPATH="/facenet/src"
 
@@ -31,15 +30,15 @@ PYTHONPATH="/facenet/src"
   name='FACE_RECOGNITION',
   description='A pipeline to train and serve the FACE RECOGNITION example.'
 )
-def face_recognition(model_export_dir='/output/export',
-                     train_steps='1000',
-                     learning_rate='0.01',
-                     batch_size='100',
-                     dataset_dir='/data',
+def face_recognition(is_aligned = 'True',
+                     train_steps='30',
+                     learning_rate='-1',
+                     batch_size='1000',
+                     dataset_dir='/dataset',
                      output_dir='/output'):
   """
   Pipeline with three stages:
-    1. prepare the face recognition dataset CASIA-WebFace
+    1. prepare the face recognition align dataset CASIA-WebFace
     2. train an facenet classifier model
     3. deploy a tf-serving instance to the cluster
     4. deploy a web-ui to interact with it
@@ -65,57 +64,89 @@ def face_recognition(model_export_dir='/output/export',
         output_vop.after(data_vop)      
         output_pvc_name = output_vop.outputs["name"]
 
-  if not is_preprocessed:
+  casia_align_data = str(dataset_dir) + "/data/casia_maxpy_mtcnnalign_182_160/" 
+  if is_aligned == 'True':
       raw_dataset = dsl.ContainerOp(
           name="raw_dataset",
-          image="aiven86/facenet-dataset-casia-webface:1.0",
-          command=["cp", "-r", "/dataset", str(dataset_dir) + "/dataset"],
-       ).apply(onprem.mount_pvc(data_pvc_name, 'local-storage', dataset_dir))
+          image="aiven86/facenet-dataset-casia-maxpy-clean:tail-2000",
+          command=["/bin/sh", "-c", "echo 'begin moving data';mv /data/ %s/;echo 'moving is finished';" % str(dataset_dir)],
+       ).apply(onprem.mount_pvc(data_pvc_name, 'dataset-storage', dataset_dir))
       raw_dataset.after(output_vop)
-      align_dataset = dsl.ContainerOp(
-          name="align_dataset",
-          image="aiven86/facenet-mtcnn-align-process:1.0",
+      casia_align_data = str(dataset_dir) + "/data/casia_maxpy_tail_2000_mtcnnalign_182_160" 
+      align_dataset_lfw = dsl.ContainerOp(
+          name="align_dataset_lfw",
+          image="aiven86/facenet-tensorflow:1.13.1-gpu-py3",
           command=["python", 
                    "/facenet/src/align/align_dataset_mtcnn.py", 
-                   str(dataset_dir) + "/dataset/lfw", 
-                   str(dataset_dir) + "/dataset/lfw_mtcnnpy_160",
+                   str(dataset_dir) + "/data/lfw", 
+                   str(dataset_dir) + "/data/lfw_mtcnnalign_160",
                    "--image_size", "160",
                    "--margin", "32",
-                   "--random_order"],
-       ) 
+                   ],
+       ).apply(onprem.mount_pvc(data_pvc_name, 'dataset-storage', dataset_dir))
+      align_dataset_lfw.container.add_resource_limit("aliyun.com/gpu-mem", 2)
+      align_dataset_lfw.container.add_env_variable(V1EnvVar(name='PYTHONPATH', value=PYTHONPATH))
+      align_dataset_lfw.after(raw_dataset)
+      align_dataset = dsl.ContainerOp(
+          name="align_dataset",
+          image="aiven86/facenet-tensorflow:1.13.1-gpu-py3",
+          command=["python",
+                   "/facenet/src/align/align_dataset_mtcnn.py",
+                   str(dataset_dir) + "/data/CASIA-maxpy-clean-tail-2000",
+                   str(casia_align_data),
+                   "--image_size", "182",
+                   "--margin", "44",
+                  ],
+       ).add_resource_limit("aliyun.com/gpu-mem", 2) 
       align_dataset.container.add_env_variable(V1EnvVar(name='PYTHONPATH', value=PYTHONPATH))
-      align_dataset.after(raw_dataset)
+      align_dataset.after(align_dataset_lfw)
   else:
       align_dataset = dsl.ContainerOp(
           name="align_dataset",
-          image="aiven86/facenet-dataset-casia-webface-mtcnn-align:1.0",
-          command=["cp", "-r", "/dataset", str(dataset_dir) + "/dataset"],
+          image="aiven86/facenet-dataset-casia-mtcnnalign:1.0",
+          command=["/bin/sh", "-c", "echo 'begin moving data';mv /data/ %s/;echo 'moving is finished';" % str(dataset_dir)],
        )
       align_dataset.after(output_vop)
 
 
   train = dsl.ContainerOp(
       name='train',
-      image='aiven86/kubeflow-examples_mnist_model:v20190304-v0.2-176-g15d997b',
+      image='aiven86/facenet-tensorflow:1.13.1-gpu-py3',
       arguments=[
-          "/opt/model.py",
-          "--tf-data-dir", str(output) + "/data",
-          "--tf-export-dir", model_export_dir,
-          "--tf-train-steps", train_steps,
-          "--tf-batch-size", batch_size,
-          "--tf-learning-rate", learning_rate
+          "python", "/facenet/src/train_softmax.py",
+          "--logs_base_dir", str(output_dir) + "/logs/facenet/",
+          "--models_base_dir", str(output_dir) + "/models/facenet/",
+          "--data_dir", str(casia_align_data),
+          "--image_size ", "160",
+          "--epoch_size", batch_size,
+          "--max_nrof_epochs", train_steps,
+          "--model_def", "models.inception_resnet_v1",
+          "--lfw_dir", str(dataset_dir) + "/data/lfw_mtcnnalign_160/"
+          "--optimizer", "ADAM",
+          "--learning_rate", learning_rate,
+          "--keep_probability", "0.8",
+          "--random_crop",
+          "--random_flip",
+          "--use_fixed_image_standardization",
+          "--learning_rate_schedule_file", "/facenet/data/learning_rate_schedule_classifier_casia.txt",
+          "--embedding_size", "512",
+          "--lfw_distance_metric", "1",
+          "--lfw_use_flipped_images",
+          "--lfw_subtract_mean",
+          "--validation_set_split_ratio", "0.05"
+          "--validate_every_n_epochs", "5",
           ]
-  )
-  train.after(download)
+  ).add_resource_limit("aliyun.com/gpu-mem", 2)
+  train.after(align_dataset)
 
   serve_args = [
-      '--model-export-path', model_export_dir,
+      '--model-export-path', str(output_dir) + "/models/facenet/",
       '--server-name', "mnist-service"
   ]
   if platform == 'onprem':
     serve_args.extend([
         '--cluster-name', "mnist-pipeline",
-        '--pvc-name', pvc_name
+        '--pvc-name', output_pvc_name
     ])
 
   serve = dsl.ContainerOp(
@@ -149,7 +180,8 @@ def face_recognition(model_export_dir='/output/export',
 
   steps = [align_dataset, train, serve, web_ui]
   for step in steps:
-    step.apply(onprem.mount_pvc(data_pvc_name, 'local-storage', dataset_dir))
+    step.apply(onprem.mount_pvc(data_pvc_name, 'dataset-storage', dataset_dir))
+    step.apply(onprem.mount_pvc(output_pvc_name, 'output-storage', output_dir))
 
 if __name__ == '__main__':
   import kfp.compiler as compiler

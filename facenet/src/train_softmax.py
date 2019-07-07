@@ -257,9 +257,21 @@ def main(args):
 
                 print('Saving statistics')
                 with h5py.File(stat_file_name, 'w') as f:
-                    for key, value in stat.iteritems():
+                    for key, value in stat.items():
                         f.create_dataset(key, data=value)
     
+    #kubeflow pipeline Artifacts for tensorboard
+    metadata = {
+        'outputs' : [{
+        'type': 'tensorboard',
+        'source': args.logs_base_dir,
+      }]
+    }
+    with open('/mlpipeline-ui-metadata.json', 'w') as f:
+      json.dump(metadata, f)
+
+    with open('/output.txt', 'w') as f:
+      f.write(args.logs_base_dir)
     return model_dir
   
 def find_threshold(var, percentile):
