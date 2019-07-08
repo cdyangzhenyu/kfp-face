@@ -4,81 +4,132 @@
     <meta charset="UTF-8">
     <title>Ral-Time Tensor Flow Face Detection and Recognition</title>
     <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+    <link rel="stylesheet" type="text/css" href="/static/bootstrap.min.css" /> 
     <style>
+     /*Author: ZhenYu Yang*/
+#web_bg{
+  position:fixed;
+  top: 0;
+  left: 0;
+  width:100%;
+  height:100%;
+  min-width: 1000px;
+  z-index:-10;
+  zoom: 1;
+  background-color: #fff;
+  background-repeat: no-repeat;
+  background-size: cover;
+  -webkit-background-size: cover;
+  -o-background-size: cover;
+  background-position: center 0;
+}
+
         div {
             position:relative;
-
         }
         video {
-            <!--position: absolute;-->
-            position: relative;
-            <!--top: 0;-->
-            <!--left: 0;-->
             z-index: -1;
             /* Mirror the local video */
             transform: scale(-1, 1);            /*For Firefox (& IE) */
             -webkit-transform: scale(-1, 1);     /*for Chrome & Opera (& Safari) */
         }
+        #videoDiv {
+            position: absolute;
+            top: 80px;
+            right: 130px;
+            border-radius: 6px;
+            background: linear-gradient(to top, rgba(92, 118, 165, 0) 0%, rgba(99, 113, 146, 0.2) 5%, rgba(55, 79, 90, 0.4) 10%, #66afe9 90%, #66afe9 95%, #66afe9 100%);
+            margin: 0 auto;
+            padding: 5px;
+        }
          canvas {
             position: absolute;
-            top: 0;
-            left: 0;
+            top: 0px;
+            right: 0px;
             z-index:1
         }
         #exCanvas {
             position: relative;
             z-index:1
         }
+        #namediv {
+          position: absolute;
+            top: 10px;
+            right: 120px;
+        }
+        #examplesPic {
+           position: absolute;
+            bottom: 20px;
+            right: 0;
+        }
+        .btn-circle {
+  position: absolute;
+            top: 287px;
+            left: 194px;
+  width: 30px;
+  height: 30px;
+  text-align: center;
+  padding: 6px 0;
+  font-size: 12px;
+  line-height: 1.428571429;
+  border-radius: 15px;
+}
+.btn-circle.btn-lg {
+  width: 88px;
+  height: 88px;
+  padding: 10px 16px;
+  font-size: 18px;
+  line-height: 1.33;
+  border-radius: 50px;
+}
+
+
+.btn-lg span {
+	font-size: 35px;
+}
+
+#titlediv span{
+    position: absolute;
+            top: 23px;
+            left: 200px;
+    font-size: 35px;
+    color: rgba(55, 226, 228, 0.86);
+}
     </style>
 </head>
 <body>
-
-<!--<h4>Real-Time Tensorflow Face Recognition</h4>-->
-
+<div id="titlediv">
+  <span>Real-Time Tensorflow Face Recognition Demo</span>
+</div>
+<div class="wrapper">
+    <div id="web_bg" style="background-image: url(/static/bg.jpg);"></div>
+</div>
 <div id="videoDiv" style="position:">
  <video id="myVideo" autoplay></video>
 </div>
 
 
-
-
 <div id="captureDiv">
-
-    <button id="buttonCapture">Capture Examples</button>
-
+    <button id="buttonCapture" class="btn btn-primary btn-circle btn-lg"><span>GO</span></button>
     <div id="captureInfo" hidden="true">
         <div>
             <span id="recAlert" style="color:red">Recording training examples...</span>
         </div>
-
-        <div id="examplesPic">
-
+    </div>
+</div>
+<div id="examplesPic">
             <div>
                 <span>Training examples:</span>
             </div>
-
-
             <canvas id="exCanvas" width="1600px" height="160"></canvas>
         </div>
-
-        <div>
-            <form action="">
-                Person name: <input id="inputName" type="text" name="pname" required>
-                <button id="updateModel" hidden="true">Update Model</button>
-            </form>
-        </div>
-
-    </div>
-
-
+        <div id="namediv">
+          <form action="" class="navbar-form pull-left">
+    <input id="inputName" type="text" name="pname" class="span2" placeholder="Your Name" required>
+    <button id="updateModel" hidden="true" class="btn btn-primary btn-large" type="submit">OK</button>
+  </form>
 </div>
-
-
-<div id="examples" hidden="true">
-
-
-</div>
-
+<div id="examples" hidden="true"></div>
 <script src="/static/local.js"></script>
 <script id="objDetect" src="/static/detect.js" data-source="myVideo" data-mirror="true" data-uploadWidth="640" data-scoreThreshold="0.40"></script>
 

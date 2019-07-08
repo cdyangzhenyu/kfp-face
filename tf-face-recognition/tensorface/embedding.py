@@ -6,7 +6,8 @@ from tensorflow.python.platform import gfile
 
 from tensorface.const import PRETREINED_MODEL_DIR
 
-MODEL_FILE_NAME = '20180402-114759/20180402-114759.pb'
+#MODEL_FILE_NAME = '20180402-114759/20180402-114759.pb'
+MODEL_FILE_NAME = os.environ.get("MODEL_FILE_NAME")
 
 # to get Flask not complain
 global tf
