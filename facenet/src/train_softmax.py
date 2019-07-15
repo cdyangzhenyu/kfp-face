@@ -272,6 +272,7 @@ def main(args):
 
     with open('/output.txt', 'w') as f:
       f.write(args.logs_base_dir)
+
     return model_dir
   
 def find_threshold(var, percentile):
@@ -465,6 +466,15 @@ def evaluate(sess, enqueue_op, image_paths_placeholder, labels_placeholder, phas
         f.write('%d\t%.5f\t%.5f\n' % (step, np.mean(accuracy), val))
     stat['lfw_accuracy'][epoch-1] = np.mean(accuracy)
     stat['lfw_valrate'][epoch-1] = val
+    metrics = {
+        'metrics': [{
+          'name': 'accuracy-score',
+          'numberValue': np.mean(accuracy),
+          'format': "PERCENTAGE",
+        }]
+      }
+    with open('/mlpipeline-metrics.json', 'w') as f:
+      json.dump(metrics, f)
 
 def save_variables_and_metagraph(sess, saver, summary_writer, model_dir, model_name, step):
     # Save the model checkpoint
